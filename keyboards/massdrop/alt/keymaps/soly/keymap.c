@@ -1,5 +1,12 @@
 #include QMK_KEYBOARD_H
 
+// Stolen from https://gist.github.com/MaxWinterstein/c99594a5f4f8da942feb72c8233445aa/
+// RGB LED timeout feature
+#define LED_TIMEOUT 15    // in minutes
+static uint16_t idle_timer = 0;
+static uint8_t halfmin_counter = 0;
+static bool led_on = true;
+
 enum alt_keycodes {
     U_T_AUTO = SAFE_RANGE, //USB Extra Port Toggle Auto Detect / Always Active
     U_T_AGCR,              //USB Toggle Automatic GCR control
@@ -52,6 +59,16 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     static uint32_t key_timer;
+
+    // led timeout
+    if (record->event.pressed) {
+      if (led_on == false) {
+        rgb_matrix_enable_noeeprom();
+        led_on = true;
+      }
+      idle_timer = timer_read();
+      halfmin_counter = 0;
+    }
 
     switch (keycode) {
         case U_T_AUTO:
@@ -122,4 +139,20 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         default:
             return true; //Process all other keycodes normally
     }
+}
+
+void matrix_scan_user(void) {
+  // idle_timer needs to be set one time
+  if (idle_timer == 0) idle_timer = timer_read();
+
+  if (led_on && timer_elapsed(idle_timer) > 30000) {
+    halfmin_counter++;
+    idle_timer = timer_read();
+  }
+
+  if (led_on && halfmin_counter >= LED_TIMEOUT * 2) {
+    rgb_matrix_disable_noeeprom();
+    led_on = false;
+    halfmin_counter = 0;
+  }
 }
